@@ -22,8 +22,8 @@ const AnimatedBackground = () => {
     handleResize();
     window.addEventListener("resize", handleResize);
     
-    // Create particles
-    const particleCount = 100;
+    // Create particles - REDUCED PARTICLE COUNT
+    const particleCount = 50; // Reduced from 100
     const particles: Particle[] = [];
     
     class Particle {
@@ -39,12 +39,12 @@ const AnimatedBackground = () => {
       constructor() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 3 + 1;
-        this.speedX = (Math.random() - 0.5) * 0.5;
-        this.speedY = (Math.random() - 0.5) * 0.5;
+        this.size = Math.random() * 2 + 1; // Reduced size range
+        this.speedX = (Math.random() - 0.5) * 0.3; // Slower speed
+        this.speedY = (Math.random() - 0.5) * 0.3; // Slower speed
         this.color = theme === "dark" ? "255, 255, 255" : "0, 0, 0";
-        this.blurSize = Math.random() * 2 + 1;
-        this.opacity = Math.random() * 0.2 + 0.1;
+        this.blurSize = Math.random() * 1.5 + 0.5; // Reduced blur
+        this.opacity = Math.random() * 0.15 + 0.05; // Reduced opacity
       }
       
       update() {
@@ -76,7 +76,7 @@ const AnimatedBackground = () => {
     }
     
     function connect() {
-      const maxDistance = 150;
+      const maxDistance = 120; // Reduced connection distance
       
       for (let a = 0; a < particles.length; a++) {
         for (let b = a; b < particles.length; b++) {
@@ -88,9 +88,9 @@ const AnimatedBackground = () => {
             const opacity = 1 - distance / maxDistance;
             ctx.beginPath();
             ctx.strokeStyle = theme === "dark" 
-              ? `rgba(255, 255, 255, ${opacity * 0.1})` 
-              : `rgba(0, 0, 0, ${opacity * 0.1})`;
-            ctx.lineWidth = 1;
+              ? `rgba(255, 255, 255, ${opacity * 0.08})` // Reduced opacity
+              : `rgba(0, 0, 0, ${opacity * 0.08})`; // Reduced opacity
+            ctx.lineWidth = 0.5; // Thinner lines
             ctx.moveTo(particles[a].x, particles[a].y);
             ctx.lineTo(particles[b].x, particles[b].y);
             ctx.stroke();
@@ -99,8 +99,10 @@ const AnimatedBackground = () => {
       }
     }
     
+    let animationFrameId: number;
+    
     function animate() {
-      requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       for (const particle of particles) {
@@ -115,6 +117,7 @@ const AnimatedBackground = () => {
     
     return () => {
       window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(animationFrameId); // Properly cancel animation frame
     };
   }, [theme]);
   

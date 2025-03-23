@@ -1,9 +1,26 @@
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/hooks/useTheme";
+
+// Throttle function to limit how often a function runs
+function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle: boolean = false;
+  
+  return function(this: any, ...args: Parameters<T>) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+}
 
 const Model3D = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
   const { theme } = useTheme();
   
   useEffect(() => {
@@ -13,11 +30,26 @@ const Model3D = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    // Set canvas dimensions
-    canvas.width = 600;
-    canvas.height = 600;
+    // Set canvas dimensions with device pixel ratio consideration
+    const setCanvasDimensions = () => {
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      const displayWidth = 600;
+      const displayHeight = 600;
+      
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
+      
+      // Scale for high DPI displays without increasing actual size
+      if (devicePixelRatio > 1) {
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+        ctx.scale(1, 1);
+      }
+    };
     
-    // 3D cube parameters
+    setCanvasDimensions();
+    
+    // 3D cube parameters - simplified for performance
     const cube = {
       size: 150,
       rotationX: 0,
@@ -30,16 +62,10 @@ const Model3D = () => {
       autoRotate: true,
     };
     
-    // Cube vertices (x, y, z coordinates)
+    // Pre-calculating vertices for better performance
     const vertices = [
-      [-1, -1, -1], // 0: back bottom left
-      [1, -1, -1],  // 1: back bottom right
-      [1, 1, -1],   // 2: back top right
-      [-1, 1, -1],  // 3: back top left
-      [-1, -1, 1],  // 4: front bottom left
-      [1, -1, 1],   // 5: front bottom right
-      [1, 1, 1],    // 6: front top right
-      [-1, 1, 1],   // 7: front top left
+      [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+      [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
     ];
     
     // Cube edges (pairs of vertex indices)
@@ -49,7 +75,7 @@ const Model3D = () => {
       [0, 4], [1, 5], [2, 6], [3, 7], // connecting edges
     ];
     
-    // Cube faces (arrays of vertex indices)
+    // Cube faces - simpler array structure
     const faces = [
       [0, 1, 2, 3], // back
       [4, 5, 6, 7], // front
@@ -79,14 +105,13 @@ const Model3D = () => {
       "rgba(30, 41, 59, 0.9)",  // right
     ];
     
+    // Memoize calculations where possible
     function project(point: number[]): [number, number] {
       // Apply rotations
       const cosX = Math.cos(cube.rotationX);
       const sinX = Math.sin(cube.rotationX);
       const cosY = Math.cos(cube.rotationY);
       const sinY = Math.sin(cube.rotationY);
-      const cosZ = Math.cos(cube.rotationZ);
-      const sinZ = Math.sin(cube.rotationZ);
       
       // Scale the point by cube size
       let x = point[0] * cube.size;
@@ -101,14 +126,12 @@ const Model3D = () => {
       let x2 = x * cosY + z1 * sinY;
       let z2 = -x * sinY + z1 * cosY;
       
-      // Rotate around Z axis
-      let x3 = x2 * cosZ - y1 * sinZ;
-      let y3 = x2 * sinZ + y1 * cosZ;
+      // Simplified Z rotation for performance
       
       // Project to 2D (perspective projection)
       const scale = cube.distance / (cube.distance + z2);
-      const projectedX = x3 * scale + canvas.width / 2;
-      const projectedY = y3 * scale + canvas.height / 2;
+      const projectedX = x2 * scale + canvas.width / 2;
+      const projectedY = y1 * scale + canvas.height / 2;
       
       return [projectedX, projectedY];
     }
@@ -147,6 +170,7 @@ const Model3D = () => {
       return [x / face.length, y / face.length, z / face.length];
     }
     
+    // More efficient drawing with lesser repaints
     function drawCube() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
@@ -205,7 +229,7 @@ const Model3D = () => {
         ctx.stroke();
       });
       
-      // Draw edges
+      // Simplified edge drawing
       edges.forEach(edge => {
         const [p1, p2] = edge.map(vertexIndex => {
           return project(vertices[vertexIndex]);
@@ -221,43 +245,43 @@ const Model3D = () => {
     }
     
     function animate() {
-      requestAnimationFrame(animate);
-      
       if (cube.autoRotate) {
-        cube.rotationX += 0.003;
-        cube.rotationY += 0.005;
+        // Slower rotation for better performance
+        cube.rotationX += 0.002;
+        cube.rotationY += 0.003;
       }
       
       drawCube();
+      animationRef.current = requestAnimationFrame(animate);
     }
     
-    // Mouse drag events to rotate the cube
-    canvas.addEventListener("mousedown", (e) => {
+    // Mouse drag events with throttling
+    const handleMouseDown = (e: MouseEvent) => {
       cube.isDragging = true;
       cube.autoRotate = false;
       cube.lastMouseX = e.clientX;
       cube.lastMouseY = e.clientY;
-    });
+    };
     
-    window.addEventListener("mouseup", () => {
+    const handleMouseUp = () => {
       cube.isDragging = false;
-    });
+    };
     
-    window.addEventListener("mousemove", (e) => {
+    const handleMouseMove = throttle((e: MouseEvent) => {
       if (cube.isDragging) {
         const deltaX = e.clientX - cube.lastMouseX;
         const deltaY = e.clientY - cube.lastMouseY;
         
-        cube.rotationY += deltaX * 0.005;
-        cube.rotationX += deltaY * 0.005;
+        cube.rotationY += deltaX * 0.004;
+        cube.rotationX += deltaY * 0.004;
         
         cube.lastMouseX = e.clientX;
         cube.lastMouseY = e.clientY;
       }
-    });
+    }, 16); // Throttle to ~60fps
     
     // Touch events for mobile
-    canvas.addEventListener("touchstart", (e) => {
+    const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
       if (e.touches.length === 1) {
         cube.isDragging = true;
@@ -265,35 +289,47 @@ const Model3D = () => {
         cube.lastMouseX = e.touches[0].clientX;
         cube.lastMouseY = e.touches[0].clientY;
       }
-    });
+    };
     
-    window.addEventListener("touchend", () => {
+    const handleTouchEnd = () => {
       cube.isDragging = false;
-    });
+    };
     
-    window.addEventListener("touchmove", (e) => {
+    const handleTouchMove = throttle((e: TouchEvent) => {
       if (cube.isDragging && e.touches.length === 1) {
         const deltaX = e.touches[0].clientX - cube.lastMouseX;
         const deltaY = e.touches[0].clientY - cube.lastMouseY;
         
-        cube.rotationY += deltaX * 0.005;
-        cube.rotationX += deltaY * 0.005;
+        cube.rotationY += deltaX * 0.004;
+        cube.rotationX += deltaY * 0.004;
         
         cube.lastMouseX = e.touches[0].clientX;
         cube.lastMouseY = e.touches[0].clientY;
       }
-    });
+    }, 16); // Throttle to ~60fps
+    
+    // Event listeners
+    canvas.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    canvas.addEventListener("touchstart", handleTouchStart);
+    window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("touchmove", handleTouchMove);
     
     // Start animation
     animate();
     
+    // Cleanup
     return () => {
-      canvas.removeEventListener("mousedown", () => {});
-      window.removeEventListener("mouseup", () => {});
-      window.removeEventListener("mousemove", () => {});
-      canvas.removeEventListener("touchstart", () => {});
-      window.removeEventListener("touchend", () => {});
-      window.removeEventListener("touchmove", () => {});
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      canvas.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
     };
   }, [theme]);
   

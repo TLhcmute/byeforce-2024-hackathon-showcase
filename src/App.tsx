@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -34,9 +33,9 @@ const App = () => {
           }
         });
       },
-      { 
+      {
         threshold: 0.1,
-        rootMargin: "0px 0px 50px 0px" // Preload slightly before entering viewport
+        rootMargin: "0px 0px 50px 0px", // Preload slightly before entering viewport
       }
     );
 
